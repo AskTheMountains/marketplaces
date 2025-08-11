@@ -1,0 +1,20 @@
+{
+    "client_name": [
+        "Example_Client"
+    ],
+    "api_key_ozon": [
+        "example_api_key_ozon"
+    ],
+    "client_id_ozon": [
+        "1"
+    ],
+    "client_id_performance_ozon": [
+        "1"
+    ],
+    "client_secret_performance_ozon": [
+        "example_client_secret_performance_ozon"
+    ],
+    "api_key_wb": [
+        "example_api_key_wb"
+    ]
+}
