@@ -134,3 +134,7 @@ cython_debug/
 
 # PyCharm settings
 .idea/
+actual_modules_versions.txt
+only_imported_modules.txt
+wb/scripts/tmp.py
+ozon/scripts/tmp.py
