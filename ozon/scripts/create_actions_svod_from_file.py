@@ -42,7 +42,7 @@ path_download_actions = (
 )
 
 # Имя файла с данными по акциям (с расширением)
-actions_file_name = 'products-1977747 (15).xlsx'
+actions_file_name = 'products-1977747(1).xlsx'
 
 
 # Функция чтения файла с акциями "Бустинг"
@@ -79,16 +79,16 @@ def process_action_file(df_actions_from_file):
 
     # Формируем словарь с названиями акций в файле из ЛК
     action_column_names = {
-       'Бустинг х2': [
+       'Бустинг х2 (Из ЛК)': [
            'Цена для получения преимуществ акции Бустинг х2',
         ],
-       'Бустинг х3': [
+       'Бустинг х3 (Из ЛК)': [
            'Цена для получения преимуществ акции Бустинг х3',
         ],
-       'Бустинг х4': [
+       'Бустинг х4 (Из ЛК)': [
            'Цена для получения преимуществ акции Бустинг х4',
         ],
-       'Максимальный бустинг': [
+       'Максимальный бустинг (Из ЛК)': [
            'Цена для максимального акционного бустинга',
         ],
     }
@@ -221,7 +221,7 @@ def get_action_list(headers, filter_dates=False):
     # Делаем reset_index после loc
     action_list_filtered = action_list_filtered.reset_index(drop=True)
     # Добавляем префикс к имени акции, отмечая, что данная акция - из АПИ
-    action_list_filtered['title'] = action_list_filtered['title'].apply(lambda x: f"{x} Из API")
+    action_list_filtered['title'] = action_list_filtered['title'].apply(lambda x: f"{x} (Из API)")
     # Добавляем номер акции
     action_list_filtered['action_number'] = np.arange(action_list_filtered.shape[0]) + 1
 
