@@ -112,45 +112,55 @@ def create_upload_statistic_dir(client_name, date_report=str(date.today())):
 
 # Функция создания диапазона дат
 # GPT START ----
-def generate_dates(reference_date: str = None) -> pd.DataFrame:
-    # Если дата не передана — используем сегодняшнюю дату
-    if reference_date is None:
-        today = datetime.now()
+def generate_dates(
+        reference_date: str = None,
+        start_date: str = None,
+        end_date: str = None
+    ) -> pd.DataFrame:
+    # Проверка на несовместимость параметров
+    if reference_date and (start_date or end_date):
+        raise ValueError("Нельзя одновременно задавать reference_date и start_date/end_date.")
+
+    # Если указан диапазон — используем его
+    if start_date and end_date:
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+    elif start_date or end_date:
+        raise ValueError("Нужно задать одновременно start_date и end_date.")
     else:
-        # Преобразуем переданную строку в объект datetime
-        today = datetime.strptime(reference_date, "%Y-%m-%d")
+        # Старая логика по reference_date
+        if reference_date is None:
+            today = datetime.now()
+        else:
+            today = datetime.strptime(reference_date, "%Y-%m-%d")
 
-    # Определяем логику дат в зависимости от дня недели
-    if today.weekday() == 0:
-        # Если сегодня понедельник (weekday() == 0)
-        # Находим понедельник предыдущей недели:
-        start_date = today - timedelta(days=7)
-        start_date = start_date - timedelta(days=start_date.weekday())
-        # Находим воскресенье предыдущей недели:
-        end_date = start_date + timedelta(days=6)
-    else:
-        # Если не понедельник:
-        # Находим понедельник текущей недели:
-        start_date = today - timedelta(days=today.weekday())
-        # Вчерашний день как конечная дата:
-        end_date = today - timedelta(days=1)
+        # Логика в зависимости от дня недели
+        if today.weekday() == 0:
+            # Если сегодня понедельник (weekday() == 0)
+            # Понедельник предыдущей недели:
+            start_dt = today - timedelta(days=7)
+            start_dt = start_dt - timedelta(days=start_dt.weekday())
+            # Воскресенье предыдущей недели:
+            end_dt = start_dt + timedelta(days=6)
+        else:
+            # Если не понедельник:
+            # Понедельник текущей недели:
+            start_dt = today - timedelta(days=today.weekday())
+            # Вчерашний день:
+            end_dt = today - timedelta(days=1)
 
-    # Формируем строки с датами в различных форматах
-    # Формат 1: только дата
-    start_date_str = start_date.strftime('%Y-%m-%d')
-    end_date_str = end_date.strftime('%Y-%m-%d')
-    # Формат 2: дата+время
-    start_date_iso = start_date.strftime('%Y-%m-%dT00:00:00Z')
-    # Для конечной даты ставим конец дня (23:59:59)
-    end_date_iso = end_date.strftime('%Y-%m-%dT23:59:59Z')
+    start_date_str = start_dt.strftime('%Y-%m-%d')
+    end_date_str = end_dt.strftime('%Y-%m-%d')
+    start_date_iso = start_dt.strftime('%Y-%m-%dT00:00:00Z')
+    end_date_iso = end_dt.strftime('%Y-%m-%dT23:59:59Z')
 
-    # Собираем результат в DataFrame с четырьмя столбцами
     df_dates = pd.DataFrame([{
-        'date_start': start_date_str,         # Начальная дата в формате %Y-%m-%d
-        'date_end': end_date_str,             # Конечная дата в формате %Y-%m-%d
-        'datetime_start': start_date_iso,     # Начальная дата в формате %Y-%m-%dT00:00:00Z
-        'datetime_end': end_date_iso          # Конечная дата в формате %Y-%m-%dT23:59:59Z
+        'date_start': start_date_str,
+        'date_end': end_date_str,
+        'datetime_start': start_date_iso,
+        'datetime_end': end_date_iso
     }])
+
     return df_dates
 # GPT END ----
 
@@ -813,7 +823,8 @@ def add_products_data_to_companies_reports(df_companies_parsed, df_products_proc
     # Заполняем пропуски, если есть
     df_companies_products_data = df_companies_products_data.fillna({
         # 'ID Модели товара': 'Неизвестная модель',
-        'model_id': 'Неизвестная модель',
+        # 'model_id': 'Неизвестная модель',
+        'model_id': 0,
         'Артикул': 'Неизвестный артикул',
     })
 
@@ -949,7 +960,8 @@ def add_products_data_to_orders(df_orders_all, df_products_processed):
     # Заполняем пропуски, если есть
     df_orders_products_data = df_orders_products_data.fillna({
         # 'ID Модели товара': 'Неизвестная модель',
-        'model_id': 'Неизвестная модель',
+        # 'model_id': 'Неизвестная модель',
+        'model_id': 0,
         'Артикул': 'Неизвестный артикул',
     })
 
@@ -2132,7 +2144,10 @@ def create_campaigns_report(
 if __name__ == '__main__':
 
     # Генерируем диапазон дат
-    df_date_range = generate_dates()
+    df_date_range = generate_dates(
+        start_date='2025-07-01',
+        end_date='2025-07-31'
+    )
     # Формируем список кампаний, по которым нужно сформировать отчет
     input_companies = create_input_companies(promotion_companies, df_date_range)
     # Дата, за которую формируется (или формировался) отчет

@@ -57,16 +57,22 @@ def add_clusters(date_report_created):
                                          sheet_name='summary')
 
     # Получение уникальных комбинаций Артикул-Кластер
-    sku_clusters = list(product(metrics_summary['Артикул_Размер'].unique(),
-                                metrics_clusters['Склад'].unique()))
+    sku_clusters = list(
+        product(
+            metrics_summary['Артикул_Размер'].unique(),
+            metrics_clusters['Склад'].unique()
+        )
+    )
     sku_clusters = pd.DataFrame(sku_clusters, columns=['Артикул_Размер', 'Склад'])
 
     # Мердж с комбинациями Артикул-Кластер.
     # Таким образом, получим все товары во всех кластерах
-    metrics_merged = sku_clusters.merge(metrics_clusters[['Артикул_Размер', 'Склад',
-                                                       'Продажи', 'Заказы', 'ОЖИДАЕТСЯ_ПОСТУПЛЕНИЕ', 'Остатки']],
-                                    on=['Артикул_Размер', 'Склад'],
-                                    how='left')
+    metrics_merged = sku_clusters.merge(
+        metrics_clusters[['Артикул_Размер', 'Склад',
+                          'Продажи', 'Заказы', 'ОЖИДАЕТСЯ_ПОСТУПЛЕНИЕ', 'Остатки']],
+        on=['Артикул_Размер', 'Склад'],
+        how='left'
+    )
     # metrics_merged = metrics_cluster.merge(sku_clusters,
     # 								left_on=['FBO OZON SKU ID', 'Кластер'],
     # 								right_on=['SKU', 'cluster'],
@@ -86,8 +92,8 @@ def add_clusters(date_report_created):
 
 
 # Функция получения списка кластеров
-def get_cluster_list(df_cluster_sourse):
-    cluster_list = df_cluster_sourse['Склад'].unique().tolist()
+def get_cluster_list(df_cluster_source):
+    cluster_list = df_cluster_source['Склад'].unique().tolist()
     return cluster_list
 
 
@@ -100,7 +106,10 @@ def read_clusters_mapping(cargo_type):
     elif cargo_type == 'boxes':
         cluster_sheet_name = 'Короба'
     # Считываем df с группировкой складов
-    clusters_mapping_df = pd.read_excel('wb_warehouses_mapping.xlsx', sheet_name=cluster_sheet_name)
+    clusters_mapping_df = pd.read_excel(
+        f'{marketplace_dir_name}/scripts/wb_warehouses_mapping.xlsx',
+        sheet_name=cluster_sheet_name
+    )
     # Удаляем дубликаты на всякий случай
     clusters_mapping_df = clusters_mapping_df.drop_duplicates(subset=['Склад'])
 
@@ -200,7 +209,12 @@ def calc_svod_by_clusters(metrics_df_with_stats):
     )
     # Получаем список складов
     cluster_list = metrics_df_by_sku_cluster.columns.to_list()
-    metrics_df_by_sku_cluster = metrics_df_by_sku_cluster.add_prefix('Потребность ').reset_index()
+    # Добавляем префикс к названию колонок
+    metrics_df_by_sku_cluster = (
+        metrics_df_by_sku_cluster
+        .add_prefix('Потребность ')
+        .reset_index()
+    )
 
     return metrics_df_by_sku_cluster, cluster_list
 
@@ -275,22 +289,27 @@ def add_demand_for_cluster_columns(metrics_df_by_cluster,
 # Функция чтения и обработки справочной таблицы
 def read_catalog():
     # Чтение справочной таблицы
-    catalog = pd.read_excel(f"Clients/{client_name}/catalog/Справочная_таблица_{client_name}_WB.xlsx")
+    catalog = pd.read_excel(f"{marketplace_dir_name}/Clients/{client_name}/catalog/Справочная_таблица_{client_name}_WB.xlsx")
+    # Создаем копию, в которой будем проводить обработку
+    catalog_processed = catalog.copy()
+    # Добавляем колонку с размером, если она отсутствует в справочной таблице
+    if 'Размер' not in catalog_processed.columns:
+        catalog_processed['Размер'] = 0
+    # Создаем колонку Артикул_Размер для мерджа
+    catalog_processed['Артикул_Размер'] = catalog_processed[['Артикул продавца', 'Размер']].apply(lambda row: '_size_'.join(row.values.astype(str)), axis=1)
     # Удаляем товары, где не указан размер
-    catalog_ = catalog.dropna(subset=['Размер'])
+    catalog_processed = catalog_processed.dropna(subset=['Размер'])
     # Если каких-то колонок не хватает, искуственно создаем их, чтобы не было ошибок
     for col in catalog_supply_columns:
-        if col not in catalog_.columns:
-            catalog_[col] = np.nan
+        if col not in catalog_processed.columns:
+            catalog_processed[col] = np.nan
     # У некоторых клиентов делаем размер строковым типом
     if client_name in ['KU_And_KU', 'Soyuz']:
-        # catalog_['Размер'] = catalog_['Размер'].astype(str).str.replace('.0', '')
-        catalog_['Размер'] = catalog_['Размер'].apply(lambda x: pd.to_numeric(x, errors='coerce'))
-        catalog_['Размер'] = catalog_['Размер'].fillna(0)
-    # Создаем колонку Артикул_Размер для мерджа
-    catalog_['Артикул_Размер'] = catalog_[['Артикул продавца', 'Размер']].apply(lambda row: '_size_'.join(row.values.astype(str)), axis=1)
+        # catalog_processed['Размер'] = catalog_processed['Размер'].astype(str).str.replace('.0', '')
+        catalog_processed['Размер'] = catalog_processed['Размер'].apply(lambda x: pd.to_numeric(x, errors='coerce'))
+        catalog_processed['Размер'] = catalog_processed['Размер'].fillna(0)
 
-    return catalog_
+    return catalog_processed
 
 
 # Заполнение некоторых столбцов из справочных таблиц, заполненных вручную
@@ -304,9 +323,6 @@ def add_columns_from_catalog(metrics_df_by_sku_with_stats, catalog):
                                                                    on=['Артикул_Размер'])
     # metrics_df_by_sku_with_stats.drop(columns=['Артикул продавца'])
     return metrics_df_by_sku_with_stats_with_catalog
-
-
-
 
 
 # Переименование и вставка колонок для соответствия шаблону
@@ -360,6 +376,7 @@ def add_columns_for_excel(df_with_stats, cluster_list, date_report_created,
     return df_with_stats_
 
 
+# Создание отчета поставок для ювелирных кластеров
 def create_jewelry_clusters_svod(clusters_mapping_df, metrics_df_all_clusters, cluster_column):
     if shop_type == 'jewelry':
         # Объединяем несколько кластеров в один
@@ -435,7 +452,11 @@ def format_excel(
     path_supply_svod = f"{marketplace_dir_name}/Clients/{client_name}/SupplySvod"
 
     # Создаем файл excel, в котором будет производиться форматирование
-    format_supply_svod.copy_supply_svod_file(path_supply_svod, date_report_created)
+    format_supply_svod.copy_supply_svod_file(
+        path_supply_svod,
+        client_name,
+        date_report_created
+    )
     # Форматирование листа "По кластерам"
     format_supply_svod.format_sheet_clusters(
         path_supply_svod,
@@ -528,11 +549,13 @@ save_sheets_to_excel(svod_excel_by_sku,
                      date_report_created
                      )
 # Форматирование файла Excel
-format_excel(date_report_created,
-             clusters_mapping_df,
-             cluster_column,
-             cluster_column_jewelry,
-             svod_excel_by_sku,
-             svod_excel_by_sku_jewelry,
-             svod_excel_for_clusters
-            )
+format_excel(
+    client_name,
+    date_report_created,
+    clusters_mapping_df,
+    cluster_column,
+    cluster_column_jewelry,
+    svod_excel_by_sku,
+    svod_excel_by_sku_jewelry,
+    svod_excel_for_clusters
+)

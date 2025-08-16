@@ -118,7 +118,7 @@ def calcMetrics(date_upload_files = str(date.today())):
         Остатки_fbs=('Остатки_fbs', 'sum')
     ).reset_index()
     # Сохранение объединенных данных в файл Excel
-    orderware.to_excel('orderware.xlsx')
+    # orderware.to_excel('orderware.xlsx')
 
     # Обработка данных каталога
     catalog = catalog.rename(columns={'Название товара': 'Наименование товара'})
@@ -190,7 +190,7 @@ def calcMetrics(date_upload_files = str(date.today())):
 
     # Закрытие записи в файл Excel
     writer.close()
-    os.remove('orderware.xlsx')
+    # os.remove('orderware.xlsx')
     logger.info('Done')
 
 
