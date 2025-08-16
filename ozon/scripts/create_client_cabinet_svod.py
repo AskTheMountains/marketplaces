@@ -795,8 +795,6 @@ def save_and_format_excel(
     wb.save(file_name_report)
 
 
-
-
 # %% Вызов всех функций
 if __name__ == '__main__':
     # Дата, за который считался (или считается) отчет
@@ -806,7 +804,10 @@ if __name__ == '__main__':
     # Директория, куда будет загружена статистика кампаний
     upload_path_statistic = create_upload_statistic_dir(client_name, date_report)
     # Генерируем даты начала и окончания периода выгрузки
-    df_dates = generate_dates()
+    df_dates = generate_dates(
+        # start_date='2025-07-01',
+        # end_date='2025-07-31'
+    )
     # Выбираем начальную и конечную дату
     date_start_print = df_dates['date_start'].iloc[0]
     date_end_print = df_dates['date_end'].iloc[0]
@@ -871,5 +872,6 @@ if __name__ == '__main__':
         date_report,
         df_dates
     )
+    logger.info(f"Done creating cabinet svod for client {client_name}")
 
 # %%
