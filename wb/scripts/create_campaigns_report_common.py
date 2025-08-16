@@ -22,6 +22,7 @@ pd.options.mode.chained_assignment = None  # default='warn'
 from wb.scripts.constants import (
     headers,
     client_name,
+    promotion_companies,
     marketplace_dir_name
 )
 # Функции выгрузки данных
@@ -52,6 +53,83 @@ def create_report_path(date_campaign_report, client_name):
         logger.info(f"Creating Companies Upload directory:{report_path}")
 
     return report_path
+
+
+# GPT START ----
+def generate_dates(
+        reference_date: str = None,
+        start_date: str = None,
+        end_date: str = None
+    ) -> pd.DataFrame:
+    # Проверка на несовместимость параметров
+    if reference_date and (start_date or end_date):
+        raise ValueError("Нельзя одновременно задавать reference_date и start_date/end_date.")
+
+    # Если указан диапазон — используем его
+    if start_date and end_date:
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+    elif start_date or end_date:
+        raise ValueError("Нужно задать одновременно start_date и end_date.")
+    else:
+        # Старая логика по reference_date
+        if reference_date is None:
+            today = datetime.now()
+        else:
+            today = datetime.strptime(reference_date, "%Y-%m-%d")
+
+        # Логика в зависимости от дня недели
+        if today.weekday() == 0:
+            # Если сегодня понедельник (weekday() == 0)
+            # Понедельник предыдущей недели:
+            start_dt = today - timedelta(days=7)
+            start_dt = start_dt - timedelta(days=start_dt.weekday())
+            # Воскресенье предыдущей недели:
+            end_dt = start_dt + timedelta(days=6)
+        else:
+            # Если не понедельник:
+            # Понедельник текущей недели:
+            start_dt = today - timedelta(days=today.weekday())
+            # Вчерашний день:
+            end_dt = today - timedelta(days=1)
+
+    start_date_str = start_dt.strftime('%Y-%m-%d')
+    end_date_str = end_dt.strftime('%Y-%m-%d')
+    start_date_iso = start_dt.strftime('%Y-%m-%dT00:00:00Z')
+    end_date_iso = end_dt.strftime('%Y-%m-%dT23:59:59Z')
+
+    df_dates = pd.DataFrame([{
+        'date_start': start_date_str,
+        'date_end': end_date_str,
+        'datetime_start': start_date_iso,
+        'datetime_end': end_date_iso
+    }])
+
+    return df_dates
+# GPT END ----
+
+# Функция получения начальной и конечной даты в формате строки
+def get_start_end_date(df_date_range, type_dates='companies'):
+    # Если задан тип дат - даты для заказов, то берем даты со временм
+    if type_dates == 'orders':
+        date_start, date_end = df_date_range.loc[0, ['datetime_start', 'datetime_end']]
+    # В остальных случаях берем даты без времени
+    else:
+        date_start, date_end = df_date_range.loc[0, ['date_start', 'date_end']]
+
+    return date_start, date_end
+
+# Функция создания списка РК с датами
+def create_input_companies(promotion_companies, df_date_range):
+    # Создаем копию списка кампаний из констант
+    input_companies = promotion_companies
+    # Получаем даты для отчета РК
+    date_start_performance, date_end_performance = get_start_end_date(df_date_range, type_dates='companies')
+    # Добавляем даты к списку РК
+    for company in input_companies:
+        company.extend([date_start_performance, date_end_performance])
+
+    return input_companies
 
 
 # Функция создания датафрейма со списком кампаний и датами их выгрузки
@@ -959,9 +1037,13 @@ def get_keywords_stats(headers, df_input_companies):
                     tmp_df_keyword_companies,
                     df_keyword_company_stats_api,
                 ], ignore_index=True)
+
             # Если была ошибка, выводим текст ошибки
             else:
                 print(resp_data_keyword_companies.text)
+
+            # Делаем паузу между запросами
+            time.sleep(0.25)
 
     # Обработка данных кампаний поиска по ключевым фразам
     # Достаем данные из словарей
@@ -1066,7 +1148,7 @@ def save_and_format_excel(
 
     # 1. Задаем список названий столбцов, которые НЕ надо форматировать как числа
     exclude_format_headers = [
-    'Артикул', 'Ассоциированный артикул', 'Номер кампании',
+    'Артикул', 'Ассоциированный артикул', 'Номер кампании', 'Артикул WB',
     ]
     # Цикл по каждому листу
     for ws in wb.worksheets:
@@ -1267,18 +1349,14 @@ def save_and_format_excel(
 
 # %% Вызов всех функций
 if __name__ == '__main__':
+    # Генерируем диапазон дат
+    df_date_range = generate_dates(
+        start_date='2025-07-19',
+        end_date='2025-08-12'
+    )
     # Список кампаний и даты для каждой кампании,
     # за которые нужно сформировать отчет
-    input_companies = [
-        # ID Кампании: ['Начальная дата', 'Конечная дата']
-        # 24246401: ['2025-05-19', '2025-05-25'],
-        # 26111907: ['2025-05-29', '2025-06-04'],
-        [27163894, '2025-07-21', '2025-07-28'],  # Орский Комбинат
-        [27098220, '2025-07-21', '2025-07-28'],  # Орский Комбинат
-        [27218787, '2025-07-21', '2025-07-28'],  # Орский Комбинат
-        [27361337, '2025-07-21', '2025-07-28'],  # Орский Комбинат
-        [27361332, '2025-07-21', '2025-07-28'],  # Орский Комбинат
-    ]
+    input_companies = create_input_companies(promotion_companies, df_date_range)
     # Дата формирования отчета
     date_campaign_report = str(date.today())
     # Создаем df с нужным списком кампаний и датами
