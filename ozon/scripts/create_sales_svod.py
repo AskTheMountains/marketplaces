@@ -44,23 +44,66 @@ def create_dirs():
 
 
 # Функция создания диапазона дат
-def generate_date_range():
+# GPT START ----
+def generate_date_range(
+        reference_date: str = None,
+        start_date: str = None,
+        end_date: str = None
+    ):
+    # Проверка на несовместимость параметров:
+    # либо используем reference_date, либо вручную заданный диапазон
+    if reference_date and (start_date or end_date):
+        raise ValueError("Нельзя одновременно задавать reference_date и start_date/end_date.")
 
-    # Текущая дата и время
-    dt_now = pd.Timestamp.now(tz='UTC')
+    # Если оба manual-диапазона заданы
+    if start_date and end_date:
+        # Парсим строки дат в объекты datetime
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+    elif start_date or end_date:
+        # Один из диапазонов не указан — ошибка
+        raise ValueError("Нужно задать одновременно start_date и end_date.")
+    else:
+        # Ни диапазон, ни reference_date не заданы явно
+        #  — значит работаем с reference_date (по умолчанию — сегодня)
+        if reference_date is None:
+            ref_dt = datetime.now()
+        else:
+            # Парсим reference_date из строки
+            ref_dt = datetime.strptime(reference_date, "%Y-%m-%d")
 
-    # Первая дата: начало месяца (время 00:00:00)
-    dt_start_of_month = dt_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        # Если дата — первое число месяца
+        if ref_dt.day == 1:
+            # Берём последний день прошлого месяца
+            prev_month_last_day = ref_dt - timedelta(days=1)
+            # Начало диапазона — первое число прошлого месяца
+            start_dt = prev_month_last_day.replace(day=1)
+            # Конец диапазона — последний день прошлого месяца
+            end_dt = prev_month_last_day
+        else:
+            # Если не первое число месяца:
+            # Начало диапазона — первое число текущего месяца
+            start_dt = ref_dt.replace(day=1)
+            # Конец диапазона — предыдущие сутки относительно reference_date
+            end_dt = ref_dt - timedelta(days=1)
 
-    # Вторая дата: предыдущие сутки, время 23:59:59
-    dt_yesterday_end = (dt_now - pd.Timedelta(days=1)).replace(hour=23, minute=59, second=59, microsecond=0)
+    # Форматы для строк и для ISO-даты по времени суток
+    start_date_str = start_dt.strftime('%Y-%m-%d')
+    end_date_str = end_dt.strftime('%Y-%m-%d')
+    start_date_iso = start_dt.strftime('%Y-%m-%dT00:00:00Z')
+    end_date_iso = end_dt.strftime('%Y-%m-%dT23:59:59Z')
 
-    # Форматирование в нужный вид
-    date_format = "%Y-%m-%dT%H:%M:%S.000Z"
-    date_start = dt_start_of_month.strftime(date_format)
-    date_end = dt_yesterday_end.strftime(date_format)
+    # Собираем результат в DataFrame
+    df_dates = pd.DataFrame([{
+        'date_start': start_date_str,       # начало диапазона (дд.мм.гггг)
+        'date_end': end_date_str,           # конец диапазона (дд.мм.гггг)
+        'datetime_start': start_date_iso,   # начало ISO-датой с 00:00:00
+        'datetime_end': end_date_iso        # конец ISO-датой с 23:59:59
+    }])
 
-    return date_start, date_end
+    return start_date_iso, end_date_iso
+# GPT END ----
+
 
 # Функция создания датафрейма с диапазоном дат
 def generate_date_range_df(date_start, date_end):
@@ -486,7 +529,10 @@ if __name__ == '__main__':
     # Формируем диапазон дат
     # date_start = '2025-07-01T00:00:00.000Z'
     # date_end = '2025-07-10T23:59:59.000Z'
-    date_start, date_end = generate_date_range()
+    date_start, date_end = generate_date_range(
+        # start_date='2025-07-22',
+        # end_date='2025-08-05'
+    )
     # Планы продаж и заказов в штуках и рублях
     plan_orders_rub = 0
     plan_orders_amount = 0
