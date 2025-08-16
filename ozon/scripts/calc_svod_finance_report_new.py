@@ -68,7 +68,7 @@ def read_finance_report_file(finance_reports_dir, date_start, date_end):
     #     })
     df_finance_report = df_finance_report.rename(columns={
         'Ozon SKU': 'SKU',
-        'Сумма итого, руб': 'Итого руб'
+        'Сумма итого, руб.': 'Итого руб'
     })
     # Добавляем уникальный идентификатор строки
     df_finance_report['id'] = np.arange(1, df_finance_report.shape[0] + 1)
@@ -1180,10 +1180,10 @@ def format_excel(date_report, df_final_costs):
 # %% Вызов всех функций
 if __name__ == "__main__":
     # Дата, с которой начинается имя папки с исходными данными
-    date_report = '2025_06'
+    date_report = '2025_07'
     # Даты, за которые был сформирован отчет (содержатся в имени файла с отчетом)
-    date_start = '2025-06-01'
-    date_end = '2025-06-30'
+    date_start = '2025-07-01'
+    date_end = '2025-07-31'
     # Дата, когда были выгружены данные по рекламе
     date_upload_performance = str(date.today())
     # Директория для сохранения результатов
