@@ -232,20 +232,28 @@ def create_campaigns_report(
         to_save=to_save,
         delete_files=delete_files
     )
-    # Убираем сшитые товары
-    df_campaigns_report = (
+
+    return df_campaigns_report
+
+# Функция обработки отчета по РК
+def process_campaigns_report(
         df_campaigns_report
-        .loc[df_campaigns_report['Тип товара'].isin(['Товар из РК']), :]
+):
+    # Создаем копию для избежания изменений в оригинальном df
+    df_campaigns_report_processed = df_campaigns_report.copy()
+    # Убираем сшитые товары
+    df_campaigns_report_processed = (
+        df_campaigns_report_processed
+        .loc[df_campaigns_report_processed['Тип товара'].isin(['Товар из РК']), :]
         .reset_index(drop=True)
     )
     # Переименовываем некоторые колонки
-    df_campaigns_report = df_campaigns_report.rename(columns={
+    df_campaigns_report_processed = df_campaigns_report_processed.rename(columns={
         'Расход с НДС, руб': 'РК',
         'ДРР, %': 'ДРР % по размеру'
     })
 
-    return df_campaigns_report
-
+    return df_campaigns_report_processed
 
 # Функция обработка списка товаров АПИ
 def process_product_list(df_products):
@@ -576,7 +584,10 @@ if __name__ == '__main__':
     # Директория, куда будет загружена статистика кампаний
     upload_path_statistic = create_upload_statistic_dir(client_name, date_report)
     # Генерируем диапазон дат
-    df_dates= generate_dates()
+    df_dates= generate_dates(
+        # start_date='2025-07-01',
+        # end_date='2025-07-31'
+    )
     # Выбираем начальную и конечную дату
     date_start_print = df_dates['date_start'].iloc[0]
     date_end_print = df_dates['date_end'].iloc[0]
@@ -584,11 +595,6 @@ if __name__ == '__main__':
         f"\nCreating client rk svod for client {client_name}\n"
         f"dates: {date_start_print} - {date_end_print}"
     )
-
-    # Получаем список товаров АПИ
-    df_products = get_ozon_product(headers, to_save=False)
-    # Обрабатываем список товаров
-    df_products_processed = process_product_list(df_products)
 
     # Получаем отчет РК
     df_campaigns_report = create_campaigns_report(
@@ -601,6 +607,14 @@ if __name__ == '__main__':
         to_save=True,
         delete_files=False
     )
+    # Обрабатываем отчет РК
+    df_campaigns_report_processed = process_campaigns_report(df_campaigns_report)
+
+    # Получаем список товаров АПИ
+    df_products = get_ozon_product(headers, to_save=False)
+    # Обрабатываем список товаров
+    df_products_processed = process_product_list(df_products)
+
     # Получаем заказы
     df_orders = get_orders_for_svod(df_dates, headers)
     # Получаем остатки
@@ -610,7 +624,7 @@ if __name__ == '__main__':
     # Добавляем данные к списку товаров
     df_products_svod = add_data_to_product_list(
         df_products_processed,
-        df_campaigns_report,
+        df_campaigns_report_processed,
         df_reminders,
         df_orders_by_products,
     )
@@ -630,3 +644,5 @@ if __name__ == '__main__':
         df_dates
     )
     logger.info(f"Done creating rk client svod for client {client_name}")
+
+# %%
