@@ -229,7 +229,7 @@ def get_last_date_from_previous_report(
         # Если не удалось конвертировать через strptime, пробуем через pandas
         if dt is None:
             try:
-                dt = pd.to_datetime(col_str, errors='raise')
+                dt = pd.to_datetime(col_str, dayfirst=True, errors='raise')
             except Exception:
                 pass  # Если ошибка — просто идём дальше
 
@@ -457,7 +457,7 @@ def read_last_report_file(last_report_filepath):
     new_columns = []
     for col in df_previous_report.columns:
         col_str = str(col)
-        dt = pd.to_datetime(col_str, errors='coerce', format='mixed')
+        dt = pd.to_datetime(col_str, errors='coerce', format='mixed', dayfirst=True)
         if not pd.isnull(dt):
             new_columns.append(dt.strftime('%d.%m.%Y'))  # формат: день.месяц.две последние цифры года
         else:
@@ -466,7 +466,7 @@ def read_last_report_file(last_report_filepath):
     # Переводим колонки с характеристиками товара в строку
     sku_columns = ['Артикул', 'Название товара', 'SKU']
     for col in sku_columns:
-        df_previous_report[col] = df_previous_report.astype(str)
+        df_previous_report[col] = df_previous_report[col].astype(str)
 
     return df_previous_report
 
@@ -649,49 +649,54 @@ def calc_month_result_column(
         df_current_and_previous_report,
         calc_month_result=False
     ):
-    if calc_month_result:
-        # --- 1. Собираем: для каждого (месяц, год) — список колонок
-        month_year_to_cols = defaultdict(list)
-        for col in df_current_and_previous_report.columns:
-            col_str = str(col)
-            # Если формат дд.мм.гг или дд.мм.гггг
-            if re.fullmatch(r"\d{2}\.\d{2}\.\d{2,4}", col_str):
-                dt = pd.to_datetime(col_str, errors='coerce', dayfirst=True)
-            else:
-                dt = pd.to_datetime(col_str, errors='coerce')
+    months_ru = {
+        1: "Январь", 2: "Февраль", 3: "Март", 4: "Апрель", 5: "Май", 6: "Июнь",
+        7: "Июль", 8: "Август", 9: "Сентябрь", 10: "Октябрь", 11: "Ноябрь", 12: "Декабрь"
+    }
+
+    df_excel_orders_svod = df_current_and_previous_report.copy()
+    if not calc_month_result:
+        return df_excel_orders_svod
+
+    # 1. Ищем все колонки-даты и формируем словарь (год, месяц): [колонки]
+    date_col_to_dt = {}
+    month_year_to_cols = defaultdict(list)
+    for col in df_excel_orders_svod.columns:
+        col_str = str(col)
+        if re.fullmatch(r"\d{2}\.\d{2}\.\d{2,4}", col_str):
+            dt = pd.to_datetime(col_str, errors='coerce', dayfirst=True)
             if not pd.isnull(dt):
-                month = dt.month
-                year = dt.year
-                month_year_to_cols[(month, year)].append(col)
+                date_col_to_dt[col] = dt
+                month_year_to_cols[(dt.year, dt.month)].append(col)
 
-        # --- 2. Для каждого уникального месяца-годa — считаем сумму, подбираем имя колонки
-        df_excel_orders_svod = df_current_and_previous_report.copy()
-        insert_commands = []
+    # 2. Добавляем итоговые столбцы за месяц
+    total_cols = {}
+    for (year, month), cols in month_year_to_cols.items():
+        cols_sorted = sorted(cols, key=lambda c: date_col_to_dt[c])
+        total_col = f"Итого {months_ru[month]} {year}"
+        df_excel_orders_svod[total_col] = df_excel_orders_svod[cols_sorted].sum(axis=1)
+        total_cols[(year, month)] = total_col
 
-        for (month, year), cols in month_year_to_cols.items():
-            # Заголовок для итога
-            total_col = f"Итого {months_ru[month]} {str(year)}" # str(year)[-2:]
-            df_excel_orders_svod[total_col] = df_excel_orders_svod[cols].sum(axis=1)
-            # Найдем место вставки: после последней из дата-колонок этого месяца
-            last_pos = max(df_excel_orders_svod.columns.get_loc(c) for c in cols)
-            insert_commands.append((last_pos, total_col))
+    # 3. Характеристики товара — это не даты и не "Итого ..."
+    date_cols = set(date_col_to_dt.keys())
+    total_name_pattern = re.compile(r"Итого [А-Яа-я]+ \d{4}$")
+    characteristics_cols = [c for c in df_excel_orders_svod.columns if (c not in date_cols) and (not total_name_pattern.match(str(c)))]
 
-        # --- 3. Формируем новый порядок колонок: вставляем каждый итог после последней даты своего месяца, сохраняя последовательность
-        cols = df_excel_orders_svod.columns.tolist()
+    # 4. Формируем порядок колонок: характеристики -> блоки месяц-даты + итог
+    month_year_sorted = sorted(month_year_to_cols.keys())
+    ordered_cols = []
+    for year, month in month_year_sorted:
+        month_cols = sorted(month_year_to_cols[(year, month)], key=lambda c: date_col_to_dt[c])
+        ordered_cols.extend(month_cols)
+        ordered_cols.append(total_cols[(year, month)])
 
-        # Чтобы не сдвигался порядок от вставок, сортируем insert_commands по last_pos (и вставки справа)
-        for shift, (last_pos, total_col) in enumerate(sorted(insert_commands, key=lambda x: x[0])):
-            # Удаляем из списка, если он уже в конце
-            cols.remove(total_col)
-            # Корректируем позицию с учетом предыдущих вставок
-            cols.insert(last_pos + 1 + shift, total_col)
+    # 5. Собираем итоговый порядок
+    full_col_order = characteristics_cols + ordered_cols
+    # Если есть "лишние" столбцы (например, итоговые, уже имеющиеся), добавим их в конец
+    missing_cols = [c for c in df_excel_orders_svod.columns if c not in full_col_order]
+    result_cols = full_col_order + missing_cols
 
-        df_excel_orders_svod = df_excel_orders_svod[cols]
-
-    else:
-        df_excel_orders_svod = df_current_and_previous_report.copy()
-
-    return df_excel_orders_svod
+    return df_excel_orders_svod[result_cols]
 # GPT END ----
 
 # Функция сохранения и форматирования отчета excel
