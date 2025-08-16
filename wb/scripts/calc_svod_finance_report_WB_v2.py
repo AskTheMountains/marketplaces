@@ -26,8 +26,8 @@ from wb.scripts.constants import (
     headers,
     client_name,
     marketplace_dir_name,
+    finance_report_price_column,
     catalog_finace_svod_columns
-
 )
 
 # Уже написанные ранее функции выгрузки данных из АПИ
@@ -38,6 +38,7 @@ from wb.scripts.uploadDataPerformanceWB import get_costs_history
 
 # Вспомогательные функции
 from generic_functions import move_columns
+from wb.scripts.wb_generic_functions import get_company_stats
 
 # Функция выгрузки отчета о реализации по апи
 def upload_realization_report(headers, date_start, date_end):
@@ -209,18 +210,20 @@ def add_new_columns(df_realization_report_renamed):
         # Убираем тайм зоны
         df_realization_report_new_columns[col] = df_realization_report_new_columns[col].dt.tz_localize(None)
     # Год и месяц из даты продажи
-    df_realization_report_new_columns['year_date_sold'] = df_realization_report_new_columns['Дата продажи'].dt.year
-    df_realization_report_new_columns['month_date_sold'] = df_realization_report_new_columns['Дата продажи'].dt.month
+    df_realization_report_new_columns['Год даты продажи'] = df_realization_report_new_columns['Дата продажи'].dt.year
+    df_realization_report_new_columns['Месяц даты продажи'] = df_realization_report_new_columns['Дата продажи'].dt.month
 
     # Переносим строки с датами в начало df
-    df_realization_report_new_columns = move_columns(df_realization_report_new_columns,
-                                                     ['Дата начала отчётного периода', 'Дата конца отчётного периода',
-                                                      'Дата заказа', 'Дата продажи','Дата операции',
-                                                      'Дата формирования отчёта',
-                                                      'Дата начала действия фиксации', 'Дата окончания действия фиксации',
-                                                      ],
-                                                      position='id',
-                                                      insert_type='after')
+    df_realization_report_new_columns = move_columns(
+        df_realization_report_new_columns,
+        ['Дата начала отчётного периода', 'Дата конца отчётного периода',
+        'Дата заказа', 'Дата продажи','Дата операции',
+        'Дата формирования отчёта',
+        'Дата начала действия фиксации', 'Дата окончания действия фиксации',
+        ],
+        position='id',
+        insert_type='after'
+    )
     # Колонки, по которым считаем прочие расходы
     other_costs_columns = [
         'Стоимость логистики',
@@ -338,7 +341,7 @@ def calc_sku_costs(df_realization_report_date_filtered, groupby_cols = ['Арт�
     df_sku_sizes_costs_stats['tmp_col'] = df_sku_costs.groupby(groupby_cols).size()
 
     # Колонка, по которой считаем продажи и возвраты в рублях
-    if client_name in ['Orsk_Combinat']:
+    if client_name in ['Orsk_Combinat', 'Neva_Metall']:
         sales_returns_col = 'Цена розничная с учетом согласованной скидки'
     else:
         sales_returns_col = 'Сумма продаж (возвратов)'
@@ -1012,7 +1015,7 @@ def parse_companies_files(date_report):
     else:
         logger.info(f"Parsing companies files")
         filenames_companies = {"path": []}
-        path_companies = f"{companies_stats_dir}/статистика-*.xlsx"
+        path_companies = f"{companies_stats_dir}/Статистика-*.xlsx"
         # Считывание файла с путем до него
         for file in glob.glob(path_companies):
             filenames_companies['path'].append(file)
@@ -1228,6 +1231,58 @@ def calc_companies_costs(df_realization_report_date_filtered, df_sku_sizes_costs
             headers,
             promotion_dates['date_start_promotion'],
             promotion_dates['date_end_promotion']
+        )
+        # Распределяем расходы из истории затрат по артикулам в кампании
+        df_companies_stats_by_sku = calc_companies_by_sku_and_size(
+            df_companies_stats,
+            df_costs_history,
+            df_sku_sizes_costs_merged
+        )
+
+    return df_companies_stats_by_sku
+
+
+# Функция расчета расходов по рекламным кампаниям (v2)
+def calc_companies_costs_v2(df_realization_report_date_filtered, df_sku_sizes_costs_merged, date_report):
+    # Ищем даты, в которых были расходы на ВБ Продвижение
+    promotion_dates = get_promotion_dates(df_realization_report_date_filtered)
+
+    # Если расходов на ВБ Продвижение не было, возвращаем пустой df
+    if any(date_promotion is None for date_promotion in promotion_dates.values()):
+        logger.info("No promotion costs have been found")
+        df_companies_stats_by_sku = pd.DataFrame()
+    # Если расходы были, то начинаем расчет расходов по рекламным кампаниям
+    else:
+        # Обработка данных рекламных кампаний
+        # df_companies_stats = parse_companies_files(date_report)
+        # # Выгружаем заказы
+        # df_orders = get_orders(
+        #     headers,
+        #     promotion_dates['date_start_orders'],
+        #     promotion_dates['date_end_orders'],
+        #     to_save=False
+        # )
+        # # Считаем заказы по размерам
+        # df_orders_stats = calc_orders_by_size(df_orders)
+
+        # Получаем данные по рекламным кампаниям
+
+        # Получение истории затрат
+        df_costs_history = get_costs_history(
+            headers,
+            promotion_dates['date_start_promotion'],
+            promotion_dates['date_end_promotion']
+        )
+        # Создаем df для передачи в метод статистики кампаний
+        df_input_companies = pd.DataFrame({
+            'Номер кампании': df_costs_history['ID Кампании'].astype(str).to_list(),
+            'date_start': promotion_dates['date_start_promotion'],
+            'date_end': promotion_dates['date_end_promotion'],
+        })
+        # Получение статистики кампаний
+        df_companies_stats = get_company_stats(
+            headers,
+            df_input_companies,
         )
         # Распределяем расходы из истории затрат по артикулам в кампании
         df_companies_stats_by_sku = calc_companies_by_sku_and_size(
@@ -1674,7 +1729,7 @@ if __name__ == '__main__':
     # Имя папки, в которую будет сохранен отчет
     date_report = '2025_07'
     # Даты, за которые нужно сформировать отчет
-    date_start = '2025-07-21T00:00:00'
+    date_start = '2025-07-01T00:00:00'
     date_end = '2025-07-31T23:59:59'
     # Директория для сохранения результатов
     finance_reports_dir = f"{marketplace_dir_name}/Clients/{client_name}/FinanceReports/{date_report}"
