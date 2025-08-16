@@ -13,7 +13,8 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 from wb.scripts.constants import (
     marketplace_dir_name,
     client_name,
-    cargo_type
+    cargo_type,
+    ignore_virtual_warehouses,
 )
 
 
@@ -40,14 +41,14 @@ def calcMetrics(date_upload_files=str(date.today())):
         tmp_df = df_list[i]
     # Для некоторых клиентов в размере заменяем точку на запятую
         if client_name in ['KU_And_KU', 'Soyuz']:
-                if {'Размер'}.issubset(tmp_df.columns):
+                if 'Размер' in tmp_df.columns:
                     tmp_df['Размер'] = tmp_df['Размер'].astype(str).str.replace(',', '.', regex=False)
                     # tmp_df['Размер'] = tmp_df['Размер'].astype(str).str.replace('.0', '', regex=False)
                     tmp_df['Размер'] = tmp_df['Размер'].apply(lambda x: pd.to_numeric(x, errors='coerce'))
                     tmp_df['Размер'] = tmp_df['Размер'].fillna(0)
         # Перевод столбца barcode в тип строки, потому что иногда встречаются
         # длинные штрихкоды которые не помещаются в int64
-        if {'barcode'}.issubset(tmp_df.columns):
+        if 'barcode' in df.columns:
             tmp_df['barcode'] = tmp_df['barcode'].astype(str)
         # Удаляем ненужную колонку
         if 'Unnamed: 0' in df.columns:
@@ -106,9 +107,11 @@ def calcMetrics(date_upload_files=str(date.today())):
     # Если нет, то товары, которые должны поступить на склад = 0
     else:
         orderware['ОЖИДАЕТСЯ_ПОСТУПЛЕНИЕ'] = 0
-    # TODO: Убираем виртуальные склады из списка складов (ВРЕМЕННО!)
-    # logger.warning("Ignoring virtual warehouses")
-    # orderware = orderware.loc[~orderware['warehouseName'].str.contains('Виртуальный', na=False), :]
+
+    # TODO: Убираем виртуальные склады из списка складов
+    if ignore_virtual_warehouses:
+        logger.warning("Ignoring virtual warehouses")
+        orderware = orderware.loc[~orderware['warehouseName'].str.contains('Виртуальный', na=False), :]
 
     # Считаем суммы по складам
     orderware_by_warehouses = (
