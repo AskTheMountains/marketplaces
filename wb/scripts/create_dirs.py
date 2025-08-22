@@ -12,7 +12,15 @@ def create_dirs():
     # Директория для клиента
     client_dir = f"{marketplace_dir_name}/Clients/{client_name}/"
     # Список директорий для создания
-    dir_names = ['UploadFiles', 'Metrics', 'catalog', 'SupplySvod', 'Actions', 'FinanceReports', 'SaleSvod']
+    dir_names = [
+        'UploadFiles',
+        'Metrics',
+        'catalog',
+        'SupplySvod',
+        'Actions/Данные по акциям',
+        'FinanceReports',
+        'SalesOrdersSvod'
+    ]
     for dir_name in dir_names:
         dir_path = os.path.join(client_dir, dir_name)
         if not os.path.exists(dir_path):

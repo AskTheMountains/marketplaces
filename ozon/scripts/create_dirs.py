@@ -19,7 +19,7 @@ def create_dirs():
         'Actions',
         'UploadFilesPerformance',
         'FinanceReports',
-        'SaleSvod',
+        'SalesOrdersSvod',
         'CampaignsReport',
         'ClientCabinetSvod',
         'ClientRKSvod',

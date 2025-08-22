@@ -36,7 +36,7 @@ def create_dirs():
     # Папка с клиентом
     client_dir = f"{marketplace_dir_name}/Clients/{client_name}/"
     # Список директорий для создания
-    dir_names = ['SaleSvod']
+    dir_names = ['SalesOrdersSvod']
     for dir_name in dir_names:
         dir_path = os.path.join(client_dir, dir_name)
         if not os.path.exists(dir_path):
@@ -399,7 +399,7 @@ def save_excel(df_plan, date_start, date_end, date_report=str(date.today())):
     date_end_file = pd.to_datetime(date_end).strftime('%d-%m-%Y')
 
     # Имя файла для сохранения отчета
-    report_file_name = (f"{marketplace_dir_name}/Clients/{client_name}/SaleSvod/"
+    report_file_name = (f"{marketplace_dir_name}/Clients/{client_name}/SalesOrdersSvod/"
                         f"{date_start_file}_{date_end_file}"
                         f"_Свод_продажи_Ozon_{client_name}.xlsx"
     )
@@ -484,7 +484,7 @@ def save_excel(df_plan, date_start, date_end, date_report=str(date.today())):
 # def format_excel(date_report=str(date.today())):
 #     logger.info(f"Formatting Sales svod for client {client_name}")
 #     # Считываем отчет
-#     report_file = f"Clients/{client_name}/SaleSvod/{date_report}_Свод_продажи_Ozon_{client_name}.xlsx"
+#     report_file = f"Clients/{client_name}/SalesOrdersSvod/{date_report}_Свод_продажи_Ozon_{client_name}.xlsx"
 #     wb = load_workbook(report_file)
 #     ws = wb[client_name]
 
